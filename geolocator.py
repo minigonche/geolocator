@@ -55,7 +55,7 @@ class Geolocator:
 
 		#Shift the lat lng coordinates by one
 		c = np.array(list(coordinates_dic.values()))
-		c_1 =  np.roll(coordinates,1,axis = 0)
+		c_1 =  np.roll(c,1,axis = 0)
 		#Absolute angle distance		
 		delta = np.abs(c - c_1)
 
@@ -109,31 +109,37 @@ class Geolocator:
 		coordinates : numpy array
 			Two dimensional array with the lattitude and longitud (in that order)
 		'''	
-		#Google
-		if(geo_engine.lower() == 'google'):
-			 g = geocoder.google(complete_location)		 
-		#Argis
-		elif(geo_engine.lower() == 'arcgis'):
-			g = geocoder.arcgis(complete_location)
-		#Argis
-		elif(geo_engine.lower() == 'yahoo'):
-			g = geocoder.yahoo(complete_location)			
-		#bing
-		elif(geo_engine.lower() == 'bing'):
-			g = geocoder.bing(complete_location, key = 'NbUiTxM3ZsZof0mfRrts~iwCj0mVkMdct_nmYdghchg~AkdUKbDkypy_4zuKgSyuGcSxXw13Z2CNtjMMsYfjJOPZGZ1sEu1KpAp9xoW3h30a')
-		#Error
-		else:
-			raise Exception('No support for engine: ' + geo_engine)						
+		try:
+			#Google
+			if(geo_engine.lower() == 'google'):
+				 g = geocoder.google(complete_location)		 
+			#Argis
+			elif(geo_engine.lower() == 'arcgis'):
+				g = geocoder.arcgis(complete_location)
+			#Argis
+			elif(geo_engine.lower() == 'yahoo'):
+				g = geocoder.yahoo(complete_location)			
+			#bing
+			elif(geo_engine.lower() == 'bing'):
+				g = geocoder.bing(complete_location, key = 'NbUiTxM3ZsZof0mfRrts~iwCj0mVkMdct_nmYdghchg~AkdUKbDkypy_4zuKgSyuGcSxXw13Z2CNtjMMsYfjJOPZGZ1sEu1KpAp9xoW3h30a')
+			#Error
+			else:
+				raise Exception('No support for engine: ' + geo_engine)						
 
-		#If nothing is located, the default location is returned	
-		if(len(g) == 0):
-			 	return self.defult_location
+			#If nothing is located, the default location is returned	
+			if(len(g) == 0):
+				 	return self.defult_location
 
-		return(np.array(g.latlng))
+			return(np.array(g.latlng))
+
+		except Exception as e:
+			print(e)
+			return self.defult_location
+
 
 
 
 #locator = Geolocator(['google','arcgis','bing'])
-#coordinates = locator.get_coordinates(address = 'DG 163 A 2 27')
+#coordinates = locator.get_coordinates(address = 'KR 17B  180-62 INTERIOR 20')
 #print(coordinates)
 #print(locator.get_error(coordinates))
