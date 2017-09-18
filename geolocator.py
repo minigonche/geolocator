@@ -35,8 +35,8 @@ class Geolocator:
 	def get_error(self, coordinates_dic):
 		'''
 		Description
-		Gets the error of a given set of coordinates. The error corresponds to the distance it will take
-		to visit each coordinate sequentially untill returning to the origin.
+		Gets the error of a given set of coordinates. The error corresponds to the diagonal of
+		the samallest enclosing square
 		-----------------------------
 		Parameters
 		-----------------------------
@@ -53,14 +53,16 @@ class Geolocator:
 		#Apply the haversine formula for the distance traveled by sequentially following the terms
 		#https://en.wikipedia.org/wiki/Great-circle_distance
 
-		#Shift the lat lng coordinates by one
+		#Calcultaes the square
 		c = np.array(list(coordinates_dic.values()))
-		c_1 =  np.roll(c,1,axis = 0)
+		x = np.amin(c, axis = 0)
+		y = np.amax(c, axis = 0)
+		
 		#Absolute angle distance		
-		delta = np.abs(c - c_1)
+		delta = np.abs(x - y)
 
 		#Haversine formula for low float point precision systems
-		sigma = np.sin((delta[:,0])/2)**2 + np.cos(c[:,0])*np.cos(c_1[:,0])*np.sin((delta[:,1])/2)**2
+		sigma = np.sin((delta[0])/2)**2 + np.cos(x[0])*np.cos(y[0])*np.sin((delta[1])/2)**2
 		sigma = 2*np.arcsin(sigma)
 
 		return(r*np.sum(sigma))
@@ -139,7 +141,9 @@ class Geolocator:
 
 
 
-#locator = Geolocator(['google','arcgis','bing'])
-#coordinates = locator.get_coordinates(address = 'KR 17B  180-62 INTERIOR 20')
-#print(coordinates)
-#print(locator.get_error(coordinates))
+locator = Geolocator(['google','arcgis','bing'])
+coordinates = locator.get_coordinates(address = 'CLL 131A 9')
+print(coordinates)
+print(locator.get_error(coordinates))
+
+
