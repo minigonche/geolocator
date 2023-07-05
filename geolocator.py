@@ -6,86 +6,78 @@
 
 import numpy as np
 import geocoder
+import os
+import pandas as pd
+from haversine import haversine, Unit
 
 
 class Geolocator:
 
 	#Initializer	
-	def __init__(self, engines = ['google']):
+	def __init__(self, 
+				engines = ['geocodefarm', 'arcgis','bing','osm', 'geolytica', 'ottawa'],
+				output_file = "out.csv"):
 		'''
 		Parameters
-		-----------------------------
-		engines : array of Strings
+		---------
+		engines : array[string]
 			Array of the engines that geocoder will use. Can be any of the following:
-			- arcgis (free)
-			- google (request limit)
+			- geocodefarm
+			- arcgis
 			- bing (api-key)
-			- Yahoo
-		-----------------------------
+			- osm
+			- geolytica
+			- ottawa
 		'''
 
 		#Saves engines	
 		self.engines = np.array(engines)
 
-		#Default location (North Pole Bitches!)
-		self.defult_location = np.array([90,180])
-
+		self.output_file = output_file
 
 
 	def get_error(self, coordinates_dic):
-		'''
-		Description
+		'''		
 		Gets the error of a given set of coordinates. The error corresponds to the diagonal of
-		the samallest enclosing square
-		-----------------------------
-		Parameters
-		-----------------------------
-		coordinates_dic : dictionary
-			A dictinoary with lattitude and longitud values for each engine
-		-----------------------------
-		Return
-		error : float
-			An average error of the locations (assuming they all refer to the same location)
-		'''
-		#Earth radius in meters
-		r = 6371000
-
-		#Apply the haversine formula for the distance traveled by sequentially following the terms
-		#https://en.wikipedia.org/wiki/Great-circle_distance
-
-		#Calcultaes the square
-		c = np.array(list(coordinates_dic.values()))
-		x = np.amin(c, axis = 0)
-		y = np.amax(c, axis = 0)
+		the smallest enclosing square
 		
-		#Absolute angle distance		
-		delta = np.abs(x - y)
-
-		#Haversine formula for low float point precision systems
-		sigma = np.sin((delta[0])/2)**2 + np.cos(x[0])*np.cos(y[0])*np.sin((delta[1])/2)**2
-		sigma = 2*np.arcsin(sigma)
-
-		return(r*np.sum(sigma))
-
-
-
-	def get_coordinates(self, address, city = 'Bogota', country = 'Colombia'):
-		'''
 		Parameters
-		-----------------------------
-		coordinates : numpy array
-			A numpy array of shape (N,2) with N lat, long coordinates of a same address 
-		-----------------------------
-		Return
+		---------
+		coordinates_dic : dictionary
+			A dictionary with latitude and longitude values for each engine
+		
+		Returns
+		-------		
+
 		error : float
 			An average error of the locations (assuming they all refer to the same location)
 		'''
 
-		complete_location = address + ',' + city + ',' +  country
+		#Calculates the square
+		c = np.array(list(coordinates_dic.values()))
+		x = np.nanmin(c, axis = 0)
+		y = np.nanmax(c, axis = 0)
+		
+		return np.round(haversine((x[0], x[1]), (y[0], y[1]), unit = "m"),2)
+
+
+
+	def get_coordinates(self, address):
+		'''
+		Parameters
+		----------
+		address : string
+			The asdress to search 
+		
+		Returns
+		-------
+		dict
+			dictionary with the lat lon values for each engine
+		'''
 
 		eng = np.reshape(self.engines, (len(self.engines),1))
 
-		latlng = np.apply_along_axis(lambda x: self.process_request(complete_location,x[0]),1, eng)
+		latlng = np.apply_along_axis(lambda x: self.process_request(address,x[0]),1, eng)
 
 		return(dict(zip(self.engines, latlng)))
 
@@ -102,48 +94,106 @@ class Geolocator:
 			locations complete adress (including city and country)
 		geo_engine : String
 			String that geocoder will use. Can be any of the following:
-			- arcgis (free)
-			- google (request limit)
-			- bing (api-key) 	
-			- Yahho	
+			- geocodefarm
+			- arcgis
+			- bing (api-key)
+			- osm
+			- geolytica
+			- ottawa
 		-----------------------------
 		Return
 		coordinates : numpy array
 			Two dimensional array with the lattitude and longitud (in that order)
 		'''	
 		try:
-			#Google
-			if(geo_engine.lower() == 'google'):
-				 g = geocoder.google(complete_location)		 
+			#geocodefarm
+			if(geo_engine.lower() == 'geocodefarm'):
+				g = geocoder.geocodefarm(complete_location)		 
 			#Argis
 			elif(geo_engine.lower() == 'arcgis'):
 				g = geocoder.arcgis(complete_location)
-			#Argis
-			elif(geo_engine.lower() == 'yahoo'):
-				g = geocoder.yahoo(complete_location)			
+			#osm
+			elif(geo_engine.lower() == 'osm'):
+				g = geocoder.osm(complete_location)			
 			#bing
 			elif(geo_engine.lower() == 'bing'):
 				g = geocoder.bing(complete_location, key = 'NbUiTxM3ZsZof0mfRrts~iwCj0mVkMdct_nmYdghchg~AkdUKbDkypy_4zuKgSyuGcSxXw13Z2CNtjMMsYfjJOPZGZ1sEu1KpAp9xoW3h30a')
+			# geolytica
+			elif(geo_engine.lower() == 'geolytica'):
+				g = geocoder.geolytica(complete_location)	
+			# ottawa
+			elif(geo_engine.lower() == 'ottawa'):
+				g = geocoder.ottawa(complete_location)	
 			#Error
 			else:
 				raise Exception('No support for engine: ' + geo_engine)						
-
-			#If nothing is located, the default location is returned	
-			if(len(g) == 0):
-				 	return self.defult_location
-
-			return(np.array(g.latlng))
+			
+			# Checks
+			if g.ok:
+				return g.latlng
+			
+			return [np.nan, np.nan]
 
 		except Exception as e:
 			print(e)
-			return self.defult_location
+			return [np.nan, np.nan]
+
+
+	def export_response_to_file(self, address, resp, include_error = True):
+		'''
+		Method that writes a response to file.
+		'''
+
+		# Check if the file exists
+		if not os.path.exists(self.output_file):
+			# Create the file if it doesn't exist
+			with open(self.output_file, 'w') as file:
+				file.write(self.create_output_file_header(include_error = include_error) + '\n')
+
+		with open(self.output_file, 'a') as file:
+				file.write(self.create_output_file_line(address=address, resp=resp, include_error = include_error) + '\n')
+		
+
+	# Support Methods
+	# ----------------------
+	def create_output_file_header(self, include_error = True):
+		
+		header = "address,"
+		header += ",".join([ f"{k}_lat,{k}_lon" for k in self.engines])
+
+		if include_error:
+			header += ",max_error" 
+
+		return header
+
+	def create_output_file_line(self, address, resp, include_error = True):
+		
+		response = f"{address},"
+
+		lines = []
+		for k in self.engines:
+
+			val = ","
+			if not pd.isna(resp[k][0]) and not pd.isna(resp[k][1]):
+				val = f"{resp[k][0]},{resp[k][1]}"
+
+			lines.append(val)
+
+		response += ",".join(lines)
+
+		if include_error:
+			response += f",{self.get_error(resp)}" 
+
+		return response
 
 
 
 
-locator = Geolocator(['google','arcgis','bing'])
-coordinates = locator.get_coordinates(address = 'CLL 131A 9')
-print(coordinates)
-print(locator.get_error(coordinates))
+if __name__ == "__main__": 
+
+	locator = Geolocator(['google','arcgis','bing'])
+	coordinates = locator.get_coordinates(address = 'CLL 131A 9')
+	print(coordinates)
+	print(locator.get_error(coordinates))
 
 
